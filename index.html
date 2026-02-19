@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Sticker Drawing App (Plain Canvas)</title>
+  <title>Sticker Drawing App (Full Tools)</title>
 
   <style>
     body {
@@ -14,24 +14,36 @@
       padding: 20px;
     }
 
-    select {
+    .toolbar {
+      display: flex;
+      gap: 10px;
       margin: 10px;
-      padding: 8px 12px;
-      font-size: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
 
     canvas {
       border: 1px solid #ccc;
       background: white;
       margin-top: 20px;
-      cursor: crosshair;
+      touch-action: none;
     }
   </style>
 </head>
 <body>
 
-  <h2>Choose a Template</h2>
+  <h2>Sticker Drawing App</h2>
+
   <select id="templateSelect"></select>
+
+  <div class="toolbar">
+    <input type="color" id="colorPicker" value="#000000">
+    <input type="range" id="brushSize" min="2" max="30" value="4">
+    <button id="eraserBtn">Eraser</button>
+    <button id="undoBtn">Undo</button>
+    <button id="redoBtn">Redo</button>
+    <button id="saveBtn">Save</button>
+  </div>
 
   <canvas id="c" width="500" height="500"></canvas>
 
@@ -40,14 +52,18 @@
     const ctx = canvas.getContext('2d');
 
     const select = document.getElementById('templateSelect');
+    const colorPicker = document.getElementById('colorPicker');
+    const brushSize = document.getElementById('brushSize');
+    const eraserBtn = document.getElementById('eraserBtn');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const saveBtn = document.getElementById('saveBtn');
 
-    // Absolute URLs to your templates on GitHub Pages
     const templates = [
       'https://arthurlin0012.github.io/art_bot_public/templates/template1.png',
       'https://arthurlin0012.github.io/art_bot_public/templates/template2.png'
     ];
 
-    // Populate dropdown
     templates.forEach((url, i) => {
       const opt = document.createElement('option');
       opt.value = url;
@@ -59,6 +75,29 @@
     let isDrawing = false;
     let lastX = 0;
     let lastY = 0;
+    let erasing = false;
+
+    // Undo/Redo stacks
+    let undoStack = [];
+    let redoStack = [];
+
+    function saveState() {
+      undoStack.push(canvas.toDataURL());
+      redoStack = [];
+    }
+
+    function restoreState(stackFrom, stackTo) {
+      if (stackFrom.length === 0) return;
+
+      stackTo.push(canvas.toDataURL());
+
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0);
+      img.src = stackFrom.pop();
+    }
+
+    undoBtn.onclick = () => restoreState(undoStack, redoStack);
+    redoBtn.onclick = () => restoreState(redoStack, undoStack);
 
     function drawTemplate() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -75,50 +114,60 @@
       img.onload = () => {
         currentTemplate = img;
         drawTemplate();
-      };
-      img.onerror = () => {
-        console.error('Failed to load template:', url);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        saveState();
       };
       img.src = url;
     }
 
-    // Initial template
     loadTemplate(select.value || templates[0]);
     select.value = templates[0];
 
-    select.addEventListener('change', () => {
-      loadTemplate(select.value);
-    });
+    select.onchange = () => loadTemplate(select.value);
 
-    // Drawing logic
-    function startDraw(e) {
-      isDrawing = true;
+    function getPos(e) {
       const rect = canvas.getBoundingClientRect();
-      lastX = e.clientX - rect.left;
-      lastY = e.clientY - rect.top;
+      if (e.touches) {
+        return {
+          x: e.touches[0].clientX - rect.left,
+          y: e.touches[0].clientY - rect.top
+        };
+      }
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+    }
+
+    function startDraw(e) {
+      e.preventDefault();
+      isDrawing = true;
+      const pos = getPos(e);
+      lastX = pos.x;
+      lastY = pos.y;
+      saveState();
     }
 
     function draw(e) {
       if (!isDrawing) return;
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      e.preventDefault();
 
-      ctx.lineWidth = 4;
+      const pos = getPos(e);
+
+      ctx.lineWidth = brushSize.value;
       ctx.lineCap = 'round';
-      ctx.strokeStyle = '#000000';
+      ctx.strokeStyle = erasing ? '#FFFFFF' : colorPicker.value;
 
       ctx.beginPath();
       ctx.moveTo(lastX, lastY);
-      ctx.lineTo(x, y);
+      ctx.lineTo(pos.x, pos.y);
       ctx.stroke();
 
-      lastX = x;
-      lastY = y;
+      lastX = pos.x;
+      lastY = pos.y;
     }
 
-    function endDraw() {
+    function endDraw(e) {
+      e.preventDefault();
       isDrawing = false;
     }
 
@@ -126,6 +175,24 @@
     canvas.addEventListener('mousemove', draw);
     canvas.addEventListener('mouseup', endDraw);
     canvas.addEventListener('mouseleave', endDraw);
+
+    canvas.addEventListener('touchstart', startDraw);
+    canvas.addEventListener('touchmove', draw);
+    canvas.addEventListener('touchend', endDraw);
+    canvas.addEventListener('touchcancel', endDraw);
+
+    eraserBtn.onclick = () => {
+      erasing = !erasing;
+      eraserBtn.textContent = erasing ? 'Drawing' : 'Eraser';
+    };
+
+    saveBtn.onclick = () => {
+      const dataURL = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = dataURL;
+      a.download = 'sticker.png';
+      a.click();
+    };
   </script>
 
 </body>
