@@ -2,10 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Sticker Drawing App</title>
-
-  <!-- Fabric.js from CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+  <title>Sticker Drawing App (Plain Canvas)</title>
 
   <style>
     body {
@@ -17,11 +14,7 @@
       padding: 20px;
     }
 
-    h2 {
-      margin-bottom: 10px;
-    }
-
-    select, button {
+    select {
       margin: 10px;
       padding: 8px 12px;
       font-size: 16px;
@@ -29,9 +22,9 @@
 
     canvas {
       border: 1px solid #ccc;
-      margin-top: 20px;
       background: white;
-      display: block;
+      margin-top: 20px;
+      cursor: crosshair;
     }
   </style>
 </head>
@@ -39,95 +32,101 @@
 
   <h2>Choose a Template</h2>
   <select id="templateSelect"></select>
-  <button id="downloadBtn">Download Sticker</button>
 
   <canvas id="c" width="500" height="500"></canvas>
 
   <script>
-    console.log("Script starting");
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
 
-    // Initialize Fabric canvas AFTER Fabric is loaded and DOM is ready
-    window.addEventListener('load', function () {
-      console.log("Window loaded");
+    const select = document.getElementById('templateSelect');
 
-      const canvasEl = document.getElementById('c');
-      console.log("Canvas element:", canvasEl);
+    // Absolute URLs to your templates on GitHub Pages
+    const templates = [
+      'https://arthurlin0012.github.io/art_bot_public/templates/template1.png',
+      'https://arthurlin0012.github.io/art_bot_public/templates/template2.png'
+    ];
 
-      const canvas = new fabric.Canvas('c', { isDrawingMode: true });
-      console.log("Fabric canvas created:", canvas);
-
-      // Brush settings
-      canvas.freeDrawingBrush.width = 4;
-      canvas.freeDrawingBrush.color = "#000000";
-
-      // Template list (paths must exist!)
-      const templates = [
-        "templates/template1.png"
-      ];
-
-      const select = document.getElementById('templateSelect');
-      const downloadBtn = document.getElementById('downloadBtn');
-
-      // Populate dropdown
-      templates.forEach(t => {
-        const opt = document.createElement('option');
-        opt.value = t;
-        opt.innerText = t.split('/').pop();
-        select.appendChild(opt);
-      });
-
-      if (templates.length > 0) {
-        select.value = templates[0];
-      }
-
-      function loadTemplate(path) {
-        console.log("Loading template:", path);
-        if (!path) return;
-
-        fabric.Image.fromURL(path, function (img) {
-          console.log("Image loaded:", img);
-
-          img.scaleToWidth(canvas.getWidth());
-
-          canvas.setBackgroundImage(
-            img,
-            canvas.renderAll.bind(canvas),
-            {
-              selectable: false
-            }
-          );
-        }, {
-          crossOrigin: 'anonymous'
-        });
-      }
-
-      // Initial template
-      loadTemplate(select.value);
-
-      // Change template when dropdown changes
-      select.addEventListener('change', function () {
-        loadTemplate(this.value);
-      });
-
-      // Save / download the drawing
-      function save() {
-        canvas.discardActiveObject();
-        canvas.renderAll();
-
-        const dataURL = canvas.toDataURL({
-          format: 'png'
-        });
-
-        const link = document.createElement('a');
-        link.href = dataURL;
-        link.download = 'sticker.png';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
-
-      downloadBtn.addEventListener('click', save);
+    // Populate dropdown
+    templates.forEach((url, i) => {
+      const opt = document.createElement('option');
+      opt.value = url;
+      opt.textContent = 'Template ' + (i + 1);
+      select.appendChild(opt);
     });
+
+    let currentTemplate = new Image();
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    function drawTemplate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (currentTemplate.complete && currentTemplate.naturalWidth > 0) {
+        const scale = canvas.width / currentTemplate.naturalWidth;
+        const h = currentTemplate.naturalHeight * scale;
+        ctx.drawImage(currentTemplate, 0, 0, canvas.width, h);
+      }
+    }
+
+    function loadTemplate(url) {
+      const img = new Image();
+      img.onload = () => {
+        currentTemplate = img;
+        drawTemplate();
+      };
+      img.onerror = () => {
+        console.error('Failed to load template:', url);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      };
+      img.src = url;
+    }
+
+    // Initial template
+    loadTemplate(select.value || templates[0]);
+    select.value = templates[0];
+
+    select.addEventListener('change', () => {
+      loadTemplate(select.value);
+    });
+
+    // Drawing logic
+    function startDraw(e) {
+      isDrawing = true;
+      const rect = canvas.getBoundingClientRect();
+      lastX = e.clientX - rect.left;
+      lastY = e.clientY - rect.top;
+    }
+
+    function draw(e) {
+      if (!isDrawing) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#000000';
+
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+
+      lastX = x;
+      lastY = y;
+    }
+
+    function endDraw() {
+      isDrawing = false;
+    }
+
+    canvas.addEventListener('mousedown', startDraw);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', endDraw);
+    canvas.addEventListener('mouseleave', endDraw);
   </script>
+
 </body>
 </html>
